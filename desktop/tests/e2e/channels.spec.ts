@@ -465,6 +465,41 @@ async function expectIntroActionsShareRow(
   }
 }
 
+async function expectIntroActionFocusRingClearance(
+  page: import("@playwright/test").Page,
+  actionTestId: string,
+) {
+  const action = page.getByTestId(actionTestId);
+
+  // Return to the card via keyboard so its focus-visible ring is active.
+  await action.focus();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(action).toBeFocused();
+
+  const clearance = await action.evaluate((element) => {
+    const scroller = element.parentElement;
+    if (!scroller) {
+      throw new Error("Channel intro action is missing its scroll container");
+    }
+
+    const actionRect = element.getBoundingClientRect();
+    const scrollerRect = scroller.getBoundingClientRect();
+
+    return {
+      bottom: scrollerRect.bottom - actionRect.bottom,
+      boxShadow: window.getComputedStyle(element).boxShadow,
+      left: actionRect.left - scrollerRect.left,
+      top: actionRect.top - scrollerRect.top,
+    };
+  });
+
+  expect(clearance.boxShadow).not.toBe("none");
+  expect(clearance.left).toBeGreaterThanOrEqual(2);
+  expect(clearance.top).toBeGreaterThanOrEqual(2);
+  expect(clearance.bottom).toBeGreaterThanOrEqual(2);
+}
+
 test.beforeEach(async ({ page }) => {
   await installMockBridge(page);
 });
@@ -1525,6 +1560,20 @@ test("empty channel shows intro actions", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.getByRole("heading", { name: "Add agents" })).toHaveCount(
     0,
+  );
+});
+
+test("channel intro action focus ring has scroll-container clearance", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await page.getByTestId("channel-random").click();
+  await expect(page.getByTestId("chat-title")).toHaveText("random");
+
+  await expectIntroActionFocusRingClearance(
+    page,
+    "channel-intro-action-create-agent",
   );
 });
 
